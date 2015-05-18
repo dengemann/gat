@@ -1,0 +1,34 @@
+Metadata-Version: 1.1
+Name: gat
+Version: 0.1.dev0
+Summary: Tools to facilitate GeneralizationAcrossTime analyses
+Home-page: https://github.com/kingjr/gat
+Author: Jean-Remi King
+Author-email: jeanremi.king@gmail.com
+License: BSD (3-clause)
+Download-URL: https://github.com/kingjr/gat
+Description: gat
+        ===
+        
+        Open source tools for Generalization Across Time time analyses of MEG/EEG based on [MNE-Python](https://github.com/kingjr/mne-python)
+        
+        Installation
+        ============
+        
+        Clone this repository and install using setup.py:
+        
+        ```python setup.py develop --user```
+        
+        You need an installation of [MNE-Python](https://github.com/dengemann/mne-python) and [Scikit-Learn](https://github.com/scikit-learn/scikit-learn) to use these tools.
+        
+Platform: any
+Classifier: Intended Audience :: Science/Research
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved
+Classifier: Programming Language :: Python
+Classifier: Topic :: Software Development
+Classifier: Topic :: Scientific/Engineering
+Classifier: Operating System :: Microsoft :: Windows
+Classifier: Operating System :: POSIX
+Classifier: Operating System :: Unix
+Classifier: Operating System :: MacOS

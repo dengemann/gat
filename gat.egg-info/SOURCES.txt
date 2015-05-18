@@ -1,0 +1,9 @@
+setup.py
+gat/__init__.py
+gat/clf.py
+gat/utils.py
+gat.egg-info/PKG-INFO
+gat.egg-info/SOURCES.txt
+gat.egg-info/dependency_links.txt
+gat.egg-info/not-zip-safe
+gat.egg-info/top_level.txt
