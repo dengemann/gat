@@ -9,6 +9,51 @@ from sklearn.svm import SVC, LinearSVC
 from sklearn.calibration import CalibratedClassifierCV
 
 
+class SSSLinearClassifier(object):
+
+    def __init__(self, clf, cv=None, n_repeats=10, random_state=0,
+                 mean_attributes=['intercept_', 'coef_'], train_size=None,
+                 test_size=.2):
+        self._clf = clf
+        self._cv = cv
+        self._n_repeats = n_repeats
+        self._random_state = random_state
+        self._train_size = train_size
+        self._test_size = test_size
+        self._mean_attributes = mean_attributes
+
+    def fit(self, X, y):
+        from copy import deepcopy
+        from sklearn.cross_validation import StratifiedShuffleSplit
+        cv = StratifiedShuffleSplit(y, self._n_repeats,
+                                    train_size=self._train_size,
+                                    test_size=self._test_size,
+                                    random_state=self._random_state)
+        attr = dict()
+        for key in self._mean_attributes:
+            attr[key] = list()
+        # fit and collect classifiers attributes
+        for train, test in cv:
+            self._clf.fit(X[train], y[train])
+            for key in self._mean_attributes:
+                attr[key].append(deepcopy(self._clf.__getattribute__(key)))
+
+        for key in self._mean_attributes:
+            self._clf.__setattr__(key, np.mean(attr[key], axis=0))
+
+    def predict(self, X):
+        return self._clf.predict(X)
+
+    def predict_proba(self, X):
+        return self._clf.predict_proba(X)
+
+    def get_params(self, deep=True):
+        return dict(clf=self._clf, cv=self._cv,
+                    n_repeats=self._n_repeats, random_state=self._random_state,
+                    mean_attributes=self._mean_attributes,
+                    train_size=self._train_size, test_size=self._test_size)
+
+
 class force_predict(object):
     def __init__(self, clf, mode='predict_proba', axis=0):
         self._mode = mode
@@ -16,7 +61,8 @@ class force_predict(object):
         self._clf = clf
 
     def fit(self, X, y, **kwargs):
-        return self._clf.fit(X, y, **kwargs)
+        self._clf.fit(X, y, **kwargs)
+        self._copyattr()
 
     def predict(self, X):
         if self._mode == 'predict_proba':
@@ -32,6 +78,10 @@ class force_predict(object):
 
     def get_params(self, deep=True):
         return dict(clf=self._clf, mode=self._mode, axis=self._axis)
+
+    def _copyattr(self):
+        for key, value in self._clf.__dict__.iteritems():
+            self.__setattr__(key, value)
 
 
 class force_weight(object):
