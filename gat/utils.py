@@ -27,7 +27,7 @@ def subscore(gat, sel, y=None, scorer=None):
     gat.y_train_ = gat.y_train_[sel]
     gat.y_pred_ = gat.y_pred_
     if scorer is not None:
-        gat.scorer_ = scorer
+        gat.scorer = scorer
     return gat.score(y=y)
 
 
