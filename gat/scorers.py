@@ -2,10 +2,15 @@
 #
 # License: BSD (3-clause)
 
+import numpy as np
+
 
 def scorer_spearman(y_true, y_pred):
     from scipy.stats import spearmanr
-    rho, p = spearmanr(y_true, y_pred[:, 0])
+    if y_pred.ndim > 1:
+        y_pred = y_pred[:, 0]
+    sel = np.where(~np.isnan(y_true + y_pred))[0]
+    rho, p = spearmanr(y_true[sel], y_pred[sel])
     return rho
 
 
