@@ -5,6 +5,7 @@
 # This module is a permanent WIP
 
 import numpy as np
+import warnings
 
 
 def drop_bad_epochs(epochs, reject=None, flat=None):
@@ -33,19 +34,8 @@ def drop_bad_epochs(epochs, reject=None, flat=None):
 
 def resample_epochs(epochs, sfreq):
     """Fast MNE epochs resampling"""
-    # from librosa import resample
-    # librosa.resample(channel, o_sfreq, sfreq, res_type=res_type)
-    from scipy.signal import resample
-
-    # resample
-    epochs._data = resample(
-        epochs._data, epochs._data.shape[2] / epochs.info['sfreq'] * sfreq,
-        axis=2)
-    # update metadata
-    epochs.info['sfreq'] = sfreq
-    epochs.times = (np.arange(epochs._data.shape[2],
-                              dtype=np.float) / sfreq + epochs.times[0])
-    return epochs
+    warnings.warn('Deprecated! Use epochs.resample() instead')
+    return epochs.resample(sfreq)
 
 
 def decim(inst, decim):
