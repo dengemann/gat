@@ -26,7 +26,9 @@ def subscore(gat, sel, y=None, scorer=None):
         gat.y_pred_.append(y_pred_)
     gat.y_train_ = gat.y_train_[sel]
     gat.y_pred_ = gat.y_pred_
-    return gat.score(y=y, scorer=scorer)
+    if scorer is not None:
+        gat.scorer_ = scorer
+    return gat.score(y=y)
 
 
 def combine_y(gat_list, order=None, n_pred=None):
