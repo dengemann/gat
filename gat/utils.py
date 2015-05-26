@@ -15,20 +15,32 @@ def subscore(gat, sel, y=None, scorer=None):
     -------
     scores
     """
-    import copy
-    gat_ = copy.deepcopy(gat)
-    # Subselection of trials
-    gat.y_pred_ = list()
-    for train in range(len(gat_.y_pred_)):
-        y_pred_ = list()
-        for test in range(len(gat_.y_pred_[train])):
-            y_pred_.append(gat_.y_pred_[train][test][sel, :])
-        gat.y_pred_.append(y_pred_)
-    # gat.y_train_ = gat.y_train_[sel]  # XXX
-    gat.y_pred_ = gat.y_pred_
+    gat = subpred(gat, sel)
     if scorer is not None:
         gat.scorer = scorer
     return gat.score(y=y)
+
+
+def subpred(gat, sel):
+    """Select subselection of y_pred_ of GAT.
+
+    Parameters
+    ----------
+        gat : GeneralizationAcrossTime object
+        sel : list or array, shape (n_predictions)
+
+    Returns
+    -------
+    gat
+    """
+    import copy
+    gat_ = copy.deepcopy(gat)
+    # Subselection of trials
+    for train in range(len(gat.y_pred_)):
+        for test in range(len(gat.y_pred_[train])):
+            gat_.y_pred_[train][test] = gat_.y_pred_[train][test][sel, :]
+    gat_.y_train_ = gat_.y_train_[sel]
+    return gat_
 
 
 def combine_y(gat_list, order=None, n_pred=None):
