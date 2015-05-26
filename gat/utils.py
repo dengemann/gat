@@ -24,7 +24,7 @@ def subscore(gat, sel, y=None, scorer=None):
         for test in range(len(gat_.y_pred_[train])):
             y_pred_.append(gat_.y_pred_[train][test][sel, :])
         gat.y_pred_.append(y_pred_)
-    gat.y_train_ = gat.y_train_[sel]
+    # gat.y_train_ = gat.y_train_[sel]  # XXX
     gat.y_pred_ = gat.y_pred_
     if scorer is not None:
         gat.scorer = scorer
@@ -67,7 +67,7 @@ def combine_y(gat_list, order=None, n_pred=None):
 
     # Identifiy trial number
     if n_pred is None:
-        n_pred = np.max([np.max(sel) for sel in order])
+        n_pred = np.max([np.max(sel) for sel in order]) + 1
     n_dims = np.shape(gat_list[0].y_pred_[0][0])[1]
 
     # Initialize combined gat
@@ -75,6 +75,10 @@ def combine_y(gat_list, order=None, n_pred=None):
 
     # Initialize y_pred
     cmb_gat.y_pred_ = list()
+    cmb_gat.cv_.n = n_pred
+    cmb_gat.cv_.test_folds = np.nan * np.zeros(n_pred)
+    cmb_gat.cv_.y = np.nan * np.zeros(n_pred)
+
     for train in range(len(gat.y_pred_)):
         y_pred_ = list()
         for test in range(len(gat.y_pred_[train])):
@@ -85,10 +89,17 @@ def combine_y(gat_list, order=None, n_pred=None):
     cmb_gat.y_train_ = np.ones((n_pred,))
 
     for gat, sel in zip(gat_list, order):
-        for train in range(len(gat.y_pred_)):
-            for test in range(len(gat.y_pred_[train])):
-                cmb_gat.y_pred_[train][test][sel, :] = gat.y_pred_[train][test]
         cmb_gat.y_train_[sel] = gat.y_train_
+        cmb_gat.cv_.test_folds[sel] = gat.cv_.test_folds
+        cmb_gat.cv_.y[sel] = gat.cv_.y
+        for t_train in range(len(gat.y_pred_)):
+            for t_test in range(len(gat.y_pred_[t_train])):
+                cmb_gat.y_pred_[t_train][t_test][sel, :] = \
+                    gat.y_pred_[t_train][t_test]
+    # clean
+    for att in ['scores_', 'scorer_', 'y_true_']:
+        if hasattr(cmb_gat, att):
+            delattr(cmb_gat, att)
     return cmb_gat
 
 
