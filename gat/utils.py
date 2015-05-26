@@ -132,3 +132,35 @@ def mean_y_pred(gat, y=None):
             y_pred_.append(y_pred__)
         y_pred.append(y_pred_)
     return y_pred
+
+
+def rescale(gat, clf=None, scorer=None, keep_sign=True):
+    if clf is None:
+        clf = gat.clf
+    if scorer is None:
+        scorer = gat.scorer_
+    cv = gat.cv_
+    y = gat.y_train_
+    y_train = gat.y_train_
+    y_pred = gat.y_pred_
+
+    n_T = len(gat.train_times_['slices'])
+    p = [list() for idx in range(n_T)]
+    for t_train in range(n_T):
+        n_t = len(gat.test_times_['slices'][t_train])
+        p[t_train] = [list() for idx in range(n_t)]
+        for t_test in range(n_t):
+            p[t_train][t_test] = np.zeros(y_pred[t_train][t_test].shape)
+            for train, test in cv:
+                n = len(y_pred[t_train][t_test])
+                X = np.reshape(y_pred[t_train][t_test][:, 0], [n, 1])
+                clf.fit(X[train], y[train])
+                p[t_train][t_test][test, 0] = clf.predict(X[test])
+                if keep_sign:
+                    if scorer(y_train[train],
+                              y_pred[t_train][t_test][train].squeeze()) < .5:
+                        p[t_train][t_test][test, 0] *= -1
+                        p[t_train][t_test][test, 0] += 1
+
+    gat.y_pred_ = p
+    return gat
