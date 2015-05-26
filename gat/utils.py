@@ -176,3 +176,16 @@ def rescale(gat, clf=None, scorer=None, keep_sign=True):
 
     gat.y_pred_ = p
     return gat
+
+
+def zscore(gat, clf=None, scorer=None, keep_sign=True):
+    y_pred = gat.y_pred_
+    n_T = len(gat.train_times_['slices'])
+    for t_train in range(n_T):
+        n_t = len(gat.test_times_['slices'][t_train])
+        for t_test in range(n_t):
+            p = y_pred[t_train][t_test]
+            p -= np.tile(np.mean(p, axis=0), [len(p), 1])
+            p /= np.tile(np.std(p, axis=0), [len(p), 1])
+            gat.y_pred_[t_train][t_test] = p
+    return gat
