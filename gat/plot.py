@@ -115,8 +115,11 @@ def plot_mean_pred(gat_list, y=None, ax=None, colors=None, show=True,
     if isinstance(gat_list, GeneralizationAcrossTime):
         gat_list = [gat_list]
 
+    if y is None or (isinstance(y, np.ndarray) and y.ndim == 1):
+        y = y = [y for idx in gat_list]
+
     preds_list = list()
-    for gat in gat_list:
+    for gat, y in zip(gat_list, y):
         preds = mean_y_pred(gat, y)
         preds_list.append(np.squeeze(preds))
     preds_list = np.mean(preds_list, axis=0).transpose(2, 0, 1)
