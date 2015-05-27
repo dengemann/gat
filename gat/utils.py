@@ -18,7 +18,8 @@ def subscore(gat, sel, y=None, scorer=None):
     gat = subpred(gat, sel)
     if scorer is not None:
         gat.scorer = scorer
-    return gat.score(y=y)
+    gat.score(y=y)
+    return gat
 
 
 def subpred(gat, sel):
