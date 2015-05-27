@@ -5,6 +5,31 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+def plot_sem(x, y, **kwargs):
+    """
+    Parameters
+    ----------
+    x : list | np.array()
+    y : list | np.array()
+    ax
+    alpha
+    color
+    line_args
+    err_args
+
+    Returns
+    -------
+    ax
+
+    Adapted from http://tonysyu.github.io/plotting-error-bars.html#.VRE9msvmvEU
+    """
+    m = np.nanmean(y, axis=0)
+    std = np.nanstd(y, axis=0)
+    n = y.shape[0] - np.sum(np.isnan(y), axis=0)
+
+    return plot_eb(x, m, std / np.sqrt(n), **kwargs)
+
+
 def plot_eb(x, y, yerr, ax=None, alpha=0.3, color=None, line_args=dict(),
             err_args=dict()):
     """
