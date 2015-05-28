@@ -1,6 +1,11 @@
 setup.py
 gat/__init__.py
-gat/clf.py
+gat/_utils.py
+gat/classifiers.py
+gat/plot.py
+gat/predicters.py
+gat/scalers.py
+gat/scorers.py
 gat/utils.py
 gat.egg-info/PKG-INFO
 gat.egg-info/SOURCES.txt

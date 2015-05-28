@@ -2,7 +2,19 @@
 #
 # License: Simplified BSD
 import numpy as np
+import warnings
 import matplotlib.pyplot as plt
+
+
+def plot_widths(x, y, lwidths, ax=None, **kwargs):
+    from matplotlib.collections import LineCollection
+    points = np.array([x, y]).T.reshape(-1, 1, 2)
+    segments = np.concatenate([points[:-1], points[1:]], axis=1)
+    lc = LineCollection(segments, linewidths=lwidths, **kwargs)
+    if ax is None:
+        fig, ax = plt.subplots(1)
+    ax.add_collection(lc)
+    return ax
 
 
 def plot_sem(x, y, **kwargs):
@@ -95,40 +107,138 @@ def fill_betweenx_discontinuous(ax, ymin, ymax, x, freq=1, **kwargs):
     return ax
 
 
-def plot_mean_pred_diagonal(gat_list, y=None, ax=None, colors=None,
-                            chance=None, show=True):
-    from gat.utils import mean_y_pred
+def plot_gat_times(gat_list, time, data='scores', chance=True,
+                   color=None, title=None,
+                   xmin=None, xmax=None, ymin=None, ymax=None,
+                   ax=None, show=True,
+                   xlabel='Time (s)', ylabel=None, legend=True, label=None):
     import matplotlib.colors as mcol
-    from mne.decoding import GeneralizationAcrossTime
-    if isinstance(gat_list, GeneralizationAcrossTime):
+    if not isinstance(gat_list, list):
         gat_list = [gat_list]
-
-    times = gat_list[0].train_times_['times']
-
-    preds_list = list()
+    time_line_list = list()
     for gat in gat_list:
-        preds = np.squeeze(np.transpose(mean_y_pred(gat, y), [2, 0, 1, 3]))
-        preds_list.append([np.diagonal(pred).T for pred in preds])
-    preds_list = np.transpose(preds_list, [1, 0, 2])
+        # select data type
+        if data == 'scores':
+            if not hasattr(gat, 'scores_'):
+                raise RuntimeError('Please score your data before trying to '
+                                   'plot scores.')
+            values = [gat.scores_]
+            if label is None:
+                label = ['Score']
+            if ylabel is None:
+                ylabel = 'Score'
+        else:
+            if not hasattr(gat, 'y_pred_'):
+                raise RuntimeError('Please predict your data before trying to '
+                                   'plot predictions.')
+            values = gat.mean_ypred()
+            if label is None:
+                label = np.unique(gat.y_train_)
+            if ylabel is None:
+                ylabel = 'Prediction'
 
+            # loop around pred_type
+            values = np.transpose(values, [2, 0, 1, 3])
+
+        # select time
+        time_line = list()
+        for value in values:
+            time_line.append(_select_time_line(value, time,
+                                               gat.train_times_,
+                                               gat.test_times_))
+        time_line_list.append(time_line)
+    time_line_list = np.transpose(time_line_list, [1, 0, 2])
+    times = [gat_list[0].test_times_['times']]
+    times = np.linspace(np.min([np.min(ttimes) for ttimes in times]),
+                        np.max([np.max(ttimes) for ttimes in times]),
+                        np.shape(time_line_list)[2])
+
+    # Plot
     if ax is None:
-        fig, ax = plt.subplots(1)
+        fig, ax = plt.subplots(1, 1)
 
-    if colors is None:
+    if color is None:
         cmap = mcol.LinearSegmentedColormap.from_list('RdPuBu', ['r', 'b'])
-        colors = [cmap(i) for i in np.linspace(0, 1, len(preds))]
+        color = [cmap(i) for i in np.linspace(0, 1, len(time_line_list))]
+    if isinstance(color, str):
+        color = [color]
+    if len(color) != len(gat_list):
+        color = [color[idx % len(color)] for idx in range(len(time_line_list))]
 
-    for preds, color in zip(preds_list, colors):
-        plot_eb(times, np.mean(preds, axis=0),
-                np.std(preds, axis=0) / np.sqrt(preds.shape[1]),
-                ax=ax, color=color)
-    if chance is not None:
-        ax.axhline(chance, color='k')
+    for time_line, col, lab in zip(time_line_list, color, label):
+        plot_sem(times, time_line, ax=ax, color=col)
 
-    if show:
+    if chance is True:
+        chance = _get_chance_level(gat.scorer_, gat.y_train_)
+
+    if chance is not False:
+        ax.axhline(float(chance), color='k', linestyle='--',
+                   label="Chance level")
+
+    ax.axvline(0, color='k', label='')
+
+    if title is not None:
+        ax.set_title(title)
+    if ymin is not None and ymax is not None:
+        ax.set_ylim(ymin, ymax)
+    if xmin is not None and xmax is not None:
+        xmin = np.min(times)
+        xmax = np.max(times)
+    ax.set_xlim(xmin, xmax)
+    if xlabel is not False:
+        ax.set_xlabel(xlabel)
+    if ylabel is not False:
+        ax.set_ylabel(ylabel)
+    if legend is True:
+        ax.legend(loc='best')
+    if show is True:
         plt.show()
 
-    return fig
+    return fig if ax is None else ax.get_figure()
+
+
+def _get_chance_level(scorer, y_train):
+    # XXX JRK This should probably be solved within sklearn?
+    if scorer.__name__ == 'accuracy_score':
+        chance = np.max([np.mean(y_train == c) for c in np.unique(y_train)])
+    elif scorer.__name__ == 'roc_auc_score':
+        chance = 0.5
+    else:
+        chance = np.nan
+        warnings.warn('Cannot find chance level from %s, specify chance'
+                      ' level' % scorer.func_name)
+    return chance
+
+
+def _select_time_line(values, sel_time, train_times_, test_times_):
+    # Detect whether gat is a full matrix or just its diagonal
+    if np.all(np.unique([len(t) for t in test_times_['times']]) == 1):
+        values = values
+    elif sel_time == 'diagonal':
+        # Get values from identical training and testing times even if GAT
+        # is not square.
+        values_ = np.zeros(len(values))
+        for train_idx, train_time in enumerate(train_times_['times']):
+            for test_times in test_times_['times']:
+                # find closest testing time from train_time
+                lag = test_times - train_time
+                test_idx = np.abs(lag).argmin()
+                # check that not more than 1 classifier away
+                if np.abs(lag[test_idx]) > train_times_['step']:
+                    value = np.nan
+                else:
+                    value = values[train_idx][test_idx]
+                values_[train_idx] = value
+    elif isinstance(sel_time, float):
+        train_times = train_times_['times']
+        idx = np.abs(train_times - sel_time).argmin()
+        if train_times[idx] - sel_time > train_times_['step']:
+            raise ValueError("No classifier trained at %s " % sel_time)
+        values_ = values[idx]
+    else:
+        raise ValueError("train_time must be 'diagonal' or a float.")
+
+    return values_
 
 
 def plot_mean_pred(gat_list, y=None, ax=None, colors=None, show=True,
@@ -179,42 +289,4 @@ def plot_mean_pred(gat_list, y=None, ax=None, colors=None, show=True,
             ax = axs
     if show is True:
         plt.show()
-    return fig
-
-
-def plot_diagonal(gat_list, significance=None, ax=None, color='blue',
-                  show=True, **kwargs):
-    from mne.decoding import GeneralizationAcrossTime
-
-    if isinstance(gat_list, GeneralizationAcrossTime):
-        gat_list = [gat_list]
-    scores = [gat.scores_ for gat in gat_list]
-
-    gat = gat_list[0]
-    gat.scores_ = np.mean(scores, axis=0)
-
-    if ax is None:
-        fig, ax = plt.subplots(1)
-    fig = gat.plot_diagonal(show=False, ax=ax, **kwargs)
-    ymin, ymax = ax.get_ylim()
-
-    scores_diag = np.array([np.diag(s) for s in scores])
-    times = gat.train_times_['times']
-
-    plot_eb(times,
-            np.mean(scores_diag, axis=0),
-            np.std(scores_diag, axis=0) / np.sqrt(len(scores)),
-            ax=ax, color=color)
-
-    if significance is not None:
-        ymin, ymax = ax.get_ylim()
-        times = gat.train_times_['times']
-        sig_times = times[np.where(np.diag(significance))[0]]
-        sfreq = (times[1] - times[0]) / 1000
-        fill_betweenx_discontinuous(ax, ymin, ymax, sig_times, freq=sfreq,
-                                    color='gray')
-
-    if show is True:
-        plt.show()
-
     return fig

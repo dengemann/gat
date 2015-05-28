@@ -1,47 +1,171 @@
+import copy
 import numpy as np
+from mne.decoding import GeneralizationAcrossTime
 
 
-def subscore(gat, sel, y=None, scorer=None):
-    """Subscores a GAT.
+class GAT(GeneralizationAcrossTime):
+    def __init__(self, gat):
+        for key in gat.__dict__.keys():
+            setattr(self, key, getattr(gat, key))
 
-    Parameters
-    ----------
-        gat : GeneralizationAcrossTime object
-        sel : list or array, shape (n_predictions)
-        y : None | list or array, shape (n_selected_predictions,)
-            If None, y set to gat.y_true_. Defaults to None.
+    def score(self, y=None, scorer=None):
+        if scorer is not None:
+            self.scorer = scorer
+        return super(GAT, self).score(y=y)
 
-    Returns
-    -------
-    scores
-    """
-    gat = subpred(gat, sel)
-    if scorer is not None:
-        gat.scorer = scorer
-    gat.score(y=y)
-    return gat
+    def subscore(self, sel, y=None, scorer=None):
+        """Subscores a GAT.
+
+        Parameters
+        ----------
+            sel : list or array, shape (n_predictions)
+            y : None | list or array, shape (n_selected_predictions,)
+                If None, y set to gat.y_true_. Defaults to None.
+
+        Returns
+        -------
+        scores
+        """
+        gat_ = self.subselect_ypred(sel)
+        if scorer is not None:
+            gat_.scorer = scorer
+        gat_.score(y=y)
+        self.scores_ = gat_.scores_
+        self.scorer_ = gat_.scorer_
+        return self
+
+    def subselect_ypred(self, sel):
+        """Select subselection of y_pred_ of GAT.
+
+        Parameters
+        ----------
+            sel : list or array, shape (n_predictions)
+
+        Returns
+        -------
+            new gat
+        """
+        import copy
+        gat_ = copy.deepcopy(self)
+        # Subselection of trials
+        for train in range(len(gat_.y_pred_)):
+            for test in range(len(gat_.y_pred_[train])):
+                gat_.y_pred_[train][test] = gat_.y_pred_[train][test][sel, :]
+        gat_.y_train_ = gat_.y_train_[sel]
+        return gat_
+
+    def mean_ypred(self, y=None):
+        """Provides mean prediction for each category.
+
+        Parameters
+        ----------
+            y : None | list or array, shape (n_predictions,)
+                If None, y set to gat.y_train_. Defaults to None.
+
+        Returns
+        -------
+        mean_y_pred : list of list of (float | array),
+                      shape (train_time, test_time, classes, predict_shape)
+            The mean prediction for each training and each testing time point
+            for each class.
+        """
+        if y is None:
+            y = self.y_train_
+        y_pred = list()
+        for train in range(len(self.y_pred_)):
+            y_pred_ = list()
+            for test in range(len(self.y_pred_[train])):
+                y_pred__ = list()
+                for c in np.unique(y):
+                    m = np.mean(self.y_pred_[train][test][y == c, :], axis=0)
+                    y_pred__.append(m)
+                y_pred_.append(y_pred__)
+            y_pred.append(y_pred_)
+        return y_pred
+
+    def rescale_ypred(self, clf=None, scorer=None, keep_sign=True):
+        if clf is None:
+            clf = self.clf
+        if scorer is None:
+            scorer = self.scorer_
+
+        y_pred_r = copy.deepcopy(self.y_pred_)
+        for t_train, y_pred_ in enumerate(self.y_pred_):
+            for t_test, y_pred__ in enumerate(y_pred_):
+                for train, test in self.cv_:
+                    n = len(y_pred__)
+                    X = np.reshape(y_pred__[:, 0], [n, 1])
+                    clf.fit(X[train], self.y_train_[train])
+                    p = clf.predict(X[test])
+                    if keep_sign:
+                        if scorer(self.y_train_[train],
+                                  y_pred__[train].squeeze()) < .5:
+                            p[test, 0] = -p[test, 0] + 1
+                    y_pred_r[t_train][t_test] = p
+        return y_pred_r
+
+    def zscore_ypred(self):
+        y_pred = copy.deepcopy(self.y_pred_)
+        n_T = len(self.train_times_['slices'])
+        for t_train in range(n_T):
+            n_t = len(self.test_times_['slices'][t_train])
+            for t_test in range(n_t):
+                p = y_pred[t_train][t_test]
+                p -= np.tile(np.mean(p, axis=0), [len(p), 1])
+                p /= np.tile(np.std(p, axis=0), [len(p), 1])
+                y_pred[t_train][t_test] = p
+        return y_pred
 
 
-def subpred(gat, sel):
-    """Select subselection of y_pred_ of GAT.
+class GATs(object):
+    def __init__(self, gat_list, remove_coef=True):
+        if isinstance(gat_list, GeneralizationAcrossTime):
+            gat_list = [gat_list]
 
-    Parameters
-    ----------
-        gat : GeneralizationAcrossTime object
-        sel : list or array, shape (n_predictions)
+        if remove_coef:
+            gat_list_ = list()
+            for gat in gat_list:
+                gat.estimators_ = list()
+                gat_list_.append(gat)
+            gat_list = gat_list_
 
-    Returns
-    -------
-    gat
-    """
-    import copy
-    gat_ = copy.deepcopy(gat)
-    # Subselection of trials
-    for train in range(len(gat.y_pred_)):
-        for test in range(len(gat.y_pred_[train])):
-            gat_.y_pred_[train][test] = gat_.y_pred_[train][test][sel, :]
-    gat_.y_train_ = gat_.y_train_[sel]
-    return gat_
+        self.gat_list = gat_list
+        for key in gat_list[0].__dict__().key():
+            setattr(self, key, getattr(gat_list[0], key))
+        if hasattr(gat_list[0], 'y_pred_'):
+            self._mean_y_pred_()
+        if hasattr(gat_list[0], 'scores_'):
+            self._mean_scores()
+        return self
+
+    def _mean_ypreds(self):
+        y_pred_list = list()
+        for gat in self.gat_list:
+            y_pred_list.append(gat.mean_ypred())
+        self.y_pred_ = copy.deepcopy(y_pred_list[0])
+        for train, y_pred_train in enumerate(self.y_pred):
+            for test in range(len(y_pred_train)):
+                self.y_pred_[train][test] = np.mean(y_pred_list[train][test],
+                                                    axis=0)
+        self.y_train_ = np.unique([gat.y_train_ for gat in self.gat_list])
+
+    def _mean_scores(self):
+        self.scores_ = np.mean([gat.scores_ for gat in self.gat_list], axis=0)
+
+    def mean_ypreds(self, y=None):
+        return self.y_preds_
+
+    def score(self, y_list=None):
+        if np.ndim(y_list) < len(self.gat_list):
+            y_list = [y_list for idx in range(len(self.gat_list))]
+
+        for gat, y in zip(self.gat_list, y_list):
+            gat.score(y=y)
+
+        self.scorer = gat.scorer_
+        self.gat.scores_ = np.mean([gat.scores_ for gat in self.gat_list],
+                                   axis=0)
+        return self.gat.scores_
 
 
 def combine_y(gat_list, order=None, n_pred=None):
@@ -61,14 +185,16 @@ def combine_y(gat_list, order=None, n_pred=None):
         cmb_gat : GeneralizationAcrossTime object
             The combined gat object"""
     import copy
-    from mne.decoding.time_gen import GeneralizationAcrossTime as GAT
-    if isinstance(gat_list, GAT):
+    from gat.utils import GAT
+
+    if isinstance(gat_list, GeneralizationAcrossTime):
         gat_list = [gat_list]
         order = [order]
 
     for gat in gat_list:
-        if not isinstance(gat, GAT):
+        if not isinstance(gat, GeneralizationAcrossTime):
             raise ValueError('gat must be a GeneralizationAcrossTime object')
+    gat_list = [GAT(gat) for gat in gat_list]
 
     if order is not None:
         if len(gat_list) != len(order):
@@ -114,79 +240,3 @@ def combine_y(gat_list, order=None, n_pred=None):
         if hasattr(cmb_gat, att):
             delattr(cmb_gat, att)
     return cmb_gat
-
-
-def mean_y_pred(gat, y=None):
-    """Provides mean prediction for each category.
-
-    Parameters
-    ----------
-        gat : GeneralizationAcrossTime object
-        y : None | list or array, shape (n_predictions,)
-            If None, y set to gat.y_train_. Defaults to None.
-
-    Returns
-    -------
-    mean_y_pred : list of list of (float | array),
-                  shape (train_time, test_time, classes, predict_shape)
-        The mean prediction for each training and each testing time point for
-        each class.
-    """
-    if y is None:
-        y = gat.y_train_
-    y_pred = list()
-    for train in range(len(gat.y_pred_)):
-        y_pred_ = list()
-        for test in range(len(gat.y_pred_[train])):
-            y_pred__ = list()
-            for c in np.unique(y):
-                m = np.mean(gat.y_pred_[train][test][y == c, :], axis=0)
-                y_pred__.append(m)
-            y_pred_.append(y_pred__)
-        y_pred.append(y_pred_)
-    return y_pred
-
-
-def rescale(gat, clf=None, scorer=None, keep_sign=True):
-    if clf is None:
-        clf = gat.clf
-    if scorer is None:
-        scorer = gat.scorer_
-    cv = gat.cv_
-    y = gat.y_train_
-    y_train = gat.y_train_
-    y_pred = gat.y_pred_
-
-    n_T = len(gat.train_times_['slices'])
-    p = [list() for idx in range(n_T)]
-    for t_train in range(n_T):
-        n_t = len(gat.test_times_['slices'][t_train])
-        p[t_train] = [list() for idx in range(n_t)]
-        for t_test in range(n_t):
-            p[t_train][t_test] = np.zeros(y_pred[t_train][t_test].shape)
-            for train, test in cv:
-                n = len(y_pred[t_train][t_test])
-                X = np.reshape(y_pred[t_train][t_test][:, 0], [n, 1])
-                clf.fit(X[train], y[train])
-                p[t_train][t_test][test, 0] = clf.predict(X[test])
-                if keep_sign:
-                    if scorer(y_train[train],
-                              y_pred[t_train][t_test][train].squeeze()) < .5:
-                        p[t_train][t_test][test, 0] *= -1
-                        p[t_train][t_test][test, 0] += 1
-
-    gat.y_pred_ = p
-    return gat
-
-
-def zscore(gat, clf=None, scorer=None, keep_sign=True):
-    y_pred = gat.y_pred_
-    n_T = len(gat.train_times_['slices'])
-    for t_train in range(n_T):
-        n_t = len(gat.test_times_['slices'][t_train])
-        for t_test in range(n_t):
-            p = y_pred[t_train][t_test]
-            p -= np.tile(np.mean(p, axis=0), [len(p), 1])
-            p /= np.tile(np.std(p, axis=0), [len(p), 1])
-            gat.y_pred_[t_train][t_test] = p
-    return gat
