@@ -242,20 +242,25 @@ def _select_time_line(values, sel_time, train_times_, test_times_):
 
 
 def plot_mean_pred(gat_list, y=None, ax=None, colors=None, show=True,
-                   levels=[.10, np.inf], alpha=1., **kwargs):
+                   zscore=True, levels=[.10, np.inf], alpha=1.,  diagonal=True,
+                   **kwargs):
     """WIP: only works for chance at .5"""
-    from gat.utils import mean_y_pred
     import matplotlib.colors as mcol
     from mne.decoding import GeneralizationAcrossTime
+    from gat.utils import GAT
     if isinstance(gat_list, GeneralizationAcrossTime):
         gat_list = [gat_list]
+
+    gat_list = [GAT(gat) for gat in gat_list]
 
     if y is None or (isinstance(y, np.ndarray) and y.ndim == 1):
         y = y = [y for idx in gat_list]
 
     preds_list = list()
     for gat, y in zip(gat_list, y):
-        preds = mean_y_pred(gat, y)
+        if zscore:
+            gat.y_pred_ = gat.zscore_ypred()
+        preds = gat.mean_ypred(y=y)
         preds_list.append(np.squeeze(preds))
     preds_list = np.mean(preds_list, axis=0).transpose(2, 0, 1)
 
@@ -277,6 +282,8 @@ def plot_mean_pred(gat_list, y=None, ax=None, colors=None, show=True,
                         alpha=.05)
         ax.axvline(0, color='k')
         ax.axhline(0, color='k')
+        if diagonal:
+            ax.plot(ax.get_xlim(), ax.get_ylim(), color='k')
     else:
         if ax is None:
             fig, axs = plt.subplots(1, len(preds_list))
@@ -286,6 +293,8 @@ def plot_mean_pred(gat_list, y=None, ax=None, colors=None, show=True,
             for pred, color, ax in zip(preds_list, colors, axs):
                 gat.scores_ = pred
                 gat.plot(ax=ax, show=False, **kwargs_)
+                if diagonal:
+                    ax.plot(ax.get_xlim(), ax.get_ylim(), color='k')
             ax = axs
     if show is True:
         plt.show()
