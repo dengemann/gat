@@ -340,3 +340,35 @@ class cluster_stat(dict):
             plt.show()
 
         return fig
+
+
+def evoked_subtract(evokeds):
+    evokeds['coef'][0].nave = 1
+    evokeds['coef'][-1].nave = 1
+    coef = evoked_weighted_subtract(evokeds)
+    return coef
+
+
+def evoked_weighted_subtract(evokeds):
+    if len(evokeds['coef']) > 2:
+        warnings.warn('More than 2 categories. Subtract last from last'
+                      'category!')
+    coef = evokeds['coef'][0] - evokeds['coef'][-1]
+    return coef
+
+
+def evoked_spearman(evokeds):
+    from scipy.stats import spearmanr
+    n_chan, n_time = evokeds['coef'][0].data.shape
+    coef = np.zeros((n_chan, n_time))
+    # TODO: need parallelization
+    for chan in range(n_chan):
+        for t in range(n_time):
+            y = range(len(evokeds['coef']))
+            X = list()
+            for i in y:
+                X.append(evokeds['coef'][i].data[chan, t])
+            coef[chan, t], _ = spearmanr(X, y)
+    evoked = evokeds['coef'][0]
+    evoked.data = coef
+    return evoked
