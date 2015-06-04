@@ -5,17 +5,32 @@ import numpy as np
 import warnings
 import matplotlib.pyplot as plt
 
-
-def plot_widths(x, y, lwidths, ax=None, **kwargs):
-    from matplotlib.collections import LineCollection
-    points = np.array([x, y]).T.reshape(-1, 1, 2)
-    segments = np.concatenate([points[:-1], points[1:]], axis=1)
-    lc = LineCollection(segments, linewidths=lwidths, **kwargs)
+def plot_widths(xs, ys, widths, ax=None, color='b', xlim=None, ylim=None,
+                **kwargs):
+    if not (len(xs) == len(ys) == len(widths)):
+        raise ValueError('xs, ys, and widths must have identical lengths')
+    fig = None
     if ax is None:
         fig, ax = plt.subplots(1)
-    ax.add_collection(lc)
-    return ax
 
+    segmentx, segmenty = [xs[0]], [ys[0]]
+    current_width = widths[0]
+    for ii, (x, y, width) in enumerate(zip(xs, ys, widths)):
+        segmentx.append(x)
+        segmenty.append(y)
+        if (width != current_width) or (ii == (len(xs) - 1)):
+            ax.plot(segmentx, segmenty, linewidth=current_width, color=color,
+                    **kwargs)
+            segmentx, segmenty = [x], [y]
+            current_width = width
+    if xlim is None:
+        xlim = [min(xs), max(xs)]
+    if ylim is None:
+        ylim = [min(ys), max(ys)]
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+
+    return ax if fig is None else fig
 
 def plot_sem(x, y, **kwargs):
     """
@@ -143,8 +158,7 @@ def plot_gat_times(gat_list, time, data='scores', chance=True,
         # select time
         time_line = list()
         for value in values:
-            time_line.append(_select_time_line(value, time,
-                                               gat.train_times_,
+            time_line.append(_select_time_line(value, time, gat.train_times_,
                                                gat.test_times_))
         time_line_list.append(time_line)
     time_line_list = np.transpose(time_line_list, [1, 0, 2])
@@ -166,7 +180,8 @@ def plot_gat_times(gat_list, time, data='scores', chance=True,
         color = [color[idx % len(color)] for idx in range(len(time_line_list))]
 
     for time_line, col, lab in zip(time_line_list, color, label):
-        plot_sem(times, time_line, ax=ax, color=col)
+        plot_sem(times, time_line, ax=ax, color=col,
+                 line_args=dict(label=label))
 
     if chance is True:
         chance = _get_chance_level(gat.scorer_, gat.y_train_)
@@ -191,6 +206,15 @@ def plot_gat_times(gat_list, time, data='scores', chance=True,
         ax.set_ylabel(ylabel)
     if legend is True:
         ax.legend(loc='best')
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.tick_params(colors='dimgray')
+    ax.xaxis.set_ticks_position('bottom')
+    ax.yaxis.set_ticks_position('left')
+    ax.xaxis.label.set_color('dimgray')
+    ax.yaxis.label.set_color('dimgray')
+    ax.spines['left'].set_color('dimgray')
+    ax.spines['bottom'].set_color('dimgray')
     if show is True:
         plt.show()
 
@@ -213,7 +237,7 @@ def _get_chance_level(scorer, y_train):
 def _select_time_line(values, sel_time, train_times_, test_times_):
     # Detect whether gat is a full matrix or just its diagonal
     if np.all(np.unique([len(t) for t in test_times_['times']]) == 1):
-        values = values
+        values_ = np.squeeze(values)
     elif sel_time == 'diagonal':
         # Get values from identical training and testing times even if GAT
         # is not square.
