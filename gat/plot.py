@@ -5,6 +5,7 @@ import numpy as np
 import warnings
 import matplotlib.pyplot as plt
 
+
 def plot_widths(xs, ys, widths, ax=None, color='b', xlim=None, ylim=None,
                 **kwargs):
     if not (len(xs) == len(ys) == len(widths)):
@@ -31,6 +32,7 @@ def plot_widths(xs, ys, widths, ax=None, color='b', xlim=None, ylim=None,
     ax.set_ylim(ylim)
 
     return ax if fig is None else fig
+
 
 def plot_sem(x, y, **kwargs):
     """
@@ -299,6 +301,8 @@ def plot_mean_pred(gat_list, y=None, ax=None, colors=None, show=True,
     if levels is not None:
         if ax is None:
             fig, ax = plt.subplots(1)
+        else:
+            fig = ax.get_figure()
         for pred, color in zip(preds_list, colors):
             ax.contour(xx, yy, abs(pred - .5), levels=levels,
                        colors=[color])
@@ -310,16 +314,17 @@ def plot_mean_pred(gat_list, y=None, ax=None, colors=None, show=True,
             ax.plot(ax.get_xlim(), ax.get_ylim(), color='k')
     else:
         if ax is None:
-            fig, axs = plt.subplots(1, len(preds_list))
-            kwargs_ = kwargs.copy()
-            if 'show' in kwargs_.keys():
-                kwargs_.pop('show')
-            for pred, color, ax in zip(preds_list, colors, axs):
-                gat.scores_ = pred
-                gat.plot(ax=ax, show=False, **kwargs_)
-                if diagonal:
-                    ax.plot(ax.get_xlim(), ax.get_ylim(), color='k')
-            ax = axs
+            fig, ax = plt.subplots(1, len(preds_list))
+        else:
+            fig = ax[0].get_figure()
+        kwargs_ = kwargs.copy()
+        if 'show' in kwargs_.keys():
+            kwargs_.pop('show')
+        for pred, color, ax_ in zip(preds_list, colors, ax):
+            gat.scores_ = pred
+            gat.plot(ax=ax, show=False, **kwargs_)
+            if diagonal:
+                ax.plot(ax_.get_xlim(), ax_.get_ylim(), color='k')
     if show is True:
         plt.show()
     return fig
