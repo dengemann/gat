@@ -62,7 +62,6 @@ def mean_ypred(gat, y=None):
         The mean prediction for each training and each testing time point
         for each class.
     """
-    return mean_ypred(gat, y)
     if y is None:
         y = gat.y_train_
     y_pred = list()
