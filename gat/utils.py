@@ -23,7 +23,6 @@ def subscore(gat, sel, y=None, scorer=None):
     return gat_.score(y=y)
 
 
-
 def subselect_ypred(gat, sel):
     """Select subselection of y_pred_ of GAT.
 
@@ -46,7 +45,7 @@ def subselect_ypred(gat, sel):
     return gat_
 
 
-def mean_ypred(gat, y=None):
+def mean_ypred(gat, y=None, classes=None):
     """Provides mean prediction for each category.
 
     Parameters
@@ -54,26 +53,47 @@ def mean_ypred(gat, y=None):
         gat : GeneralizationAcrossTime
         y : None | list or array, shape (n_predictions,)
             If None, y set to gat.y_train_. Defaults to None.
+        classes : int | list of int
+            The classes to be averaged. Defaults to np.unique(y).
+            If [c not in y for c in classes], returns np.nan
 
     Returns
     -------
-    mean_y_pred : list of list of (float | array),
-                  shape (train_time, test_time, classes, predict_shape)
+    mean_y_pred : list of list of (float | array) | np.ndarray
+                  shape (n_train_time, n_test_time, n_classes, n_predict_shape)
         The mean prediction for each training and each testing time point
         for each class.
     """
     if y is None:
         y = gat.y_train_
-    y_pred = list()
-    for train in range(len(gat.y_pred_)):
-        y_pred_ = list()
-        for test in range(len(gat.y_pred_[train])):
-            y_pred__ = list()
-            for c in np.unique(y):
-                m = np.mean(gat.y_pred_[train][test][y == c, :], axis=0)
-                y_pred__.append(m)
-            y_pred_.append(y_pred__)
-        y_pred.append(y_pred_)
+    if classes is None:
+        classes = np.unique(y)
+    try:
+        y_pred = np.array(gat.y_pred_)[:, :, range(len(classes)), :]
+        for ii, c in enumerate(classes):
+            sel = y == c
+            if sum(sel):
+                y_pred[:, :, ii, :] = np.mean(
+                    np.array(gat.y_pred_)[:, :, sel, :], axis=2)
+            else:
+                y_pred[:, :, ii, :] = np.nan
+
+    except ValueError:
+        y_pred = list()
+        for train in range(len(gat.y_pred_)):
+            y_pred_ = list()
+            for test in range(len(gat.y_pred_[train])):
+                y_pred__ = list()
+                for c in classes:
+                    sel = y == c
+                    if sum(sel):
+                        m = np.mean(
+                            gat.y_pred_[train][test][y == c, :], axis=0)
+                    else:
+                        m = np.nan
+                    y_pred__.append(m)
+                y_pred_.append(y_pred__)
+            y_pred.append(y_pred_)
     return y_pred
 
 
