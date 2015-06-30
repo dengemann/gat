@@ -45,7 +45,7 @@ def subselect_ypred(gat, sel):
     return gat_
 
 
-def mean_ypred(gat, y=None, classes=None):
+def mean_ypred(gat, y=None, classes=None, sel=None):
     """Provides mean prediction for each category.
 
     Parameters
@@ -56,6 +56,9 @@ def mean_ypred(gat, y=None, classes=None):
         classes : int | list of int
             The classes to be averaged. Defaults to np.unique(y).
             If [c not in y for c in classes], returns np.nan
+        sel : list of indices
+            Selected y_pred. Defaults to range(n_predictions).
+            /!\ If y given, expect to be able to do y[sel].
 
     Returns
     -------
@@ -64,12 +67,14 @@ def mean_ypred(gat, y=None, classes=None):
         The mean prediction for each training and each testing time point
         for each class.
     """
+    if sel is None:
+        sel = range(len(gat.y_pred_[0][0]))
     if y is None:
-        y = gat.y_train_
+        y = gat.y_train_[sel]
     if classes is None:
         classes = np.unique(y)
     try:
-        y_pred = np.array(gat.y_pred_)[:, :, range(len(classes)), :]
+        y_pred = np.array(gat.y_pred_)[:, :, sel, :]
         for ii, c in enumerate(classes):
             sel = y == c
             if sum(sel):
@@ -87,8 +92,8 @@ def mean_ypred(gat, y=None, classes=None):
                 for c in classes:
                     sel = y == c
                     if sum(sel):
-                        m = np.mean(
-                            gat.y_pred_[train][test][y == c, :], axis=0)
+                        y_pred = gat.y_pred_[train][test][sel, :]
+                        m = np.mean(y_pred[y == c, :], axis=0)
                     else:
                         m = np.nan
                     y_pred__.append(m)
