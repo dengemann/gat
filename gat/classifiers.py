@@ -89,7 +89,8 @@ class force_weight(object):
         self._clf = clf
 
     def fit(self, X, y):
-        return self._clf.fit(X, y[:, 0], sample_weight=y[:, 1])
+        return self._clf.fit(X, np.array(y[:, 0], dtype=int),
+                             sample_weight=np.array(y[:, 1]))
 
     def predict(self, X):
         return self._clf.predict(X)
